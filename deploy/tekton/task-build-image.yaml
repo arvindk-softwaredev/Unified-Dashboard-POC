@@ -1,0 +1,49 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: build-image-kaniko
+  labels:
+    app.kubernetes.io/part-of: unified-dashboard
+spec:
+  params:
+    - name: IMAGE
+      type: string
+      description: Full image reference including tag
+    - name: DOCKERFILE
+      type: string
+      default: Dockerfile
+    - name: CONTEXT
+      type: string
+      default: .
+  workspaces:
+    - name: source
+    - name: dockerconfig
+      optional: true
+  steps:
+    - name: prepare-docker-config
+      image: alpine:3.20
+      script: |
+        #!/bin/sh
+        set -eu
+        mkdir -p /kaniko/.docker
+        if [ -f "$(workspaces.dockerconfig.path)/.dockerconfigjson" ]; then
+          cp "$(workspaces.dockerconfig.path)/.dockerconfigjson" /kaniko/.docker/config.json
+        fi
+      volumeMounts:
+        - name: kaniko-docker
+          mountPath: /kaniko/.docker
+    - name: build-and-push
+      image: gcr.io/kaniko-project/executor:v1.23.2
+      workingDir: $(workspaces.source.path)
+      args:
+        - --dockerfile=$(params.DOCKERFILE)
+        - --context=$(workspaces.source.path)/$(params.CONTEXT)
+        - --destination=$(params.IMAGE)
+        - --skip-tls-verify
+      volumeMounts:
+        - name: kaniko-docker
+          mountPath: /kaniko/.docker
+          readOnly: true
+  volumes:
+    - name: kaniko-docker
+      emptyDir: {}

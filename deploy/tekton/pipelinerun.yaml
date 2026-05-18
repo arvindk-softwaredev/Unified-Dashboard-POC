@@ -1,0 +1,38 @@
+apiVersion: tekton.dev/v1
+kind: PipelineRun
+metadata:
+  generateName: unified-dashboard-
+  labels:
+    app.kubernetes.io/part-of: unified-dashboard
+spec:
+  pipelineRef:
+    name: unified-dashboard
+  params:
+  # Set your repo URL (HTTPS or SSH with credentials in workspace)
+  - name: git-url
+    value: https://github.com/YOUR_ORG/UnifiedDashboard.git
+  - name: git-revision
+    value: main
+  # OpenShift internal registry example:
+  - name: image-registry
+    value: image-registry.openshift-image-registry.svc:5000/unified-dashboard
+  - name: image-tag
+    value: latest
+  - name: deploy-namespace
+    value: unified-dashboard
+  - name: run-deploy
+    value: "true"
+  workspaces:
+  - name: source
+    volumeClaimTemplate:
+      spec:
+        accessModes: [ReadWriteOnce]
+        resources:
+          requests:
+            storage: 1Gi
+  # Optional: bind dockerconfig for pushing to external registries
+  # - name: dockerconfig
+  #   secret:
+  #     secretName: dockerconfig-secret
+  taskRunTemplate:
+    serviceAccountName: pipeline

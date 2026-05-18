@@ -1,0 +1,23 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: deploy/docker/Dockerfile.backend
+    env_file:
+      - backend/.env
+    environment:
+      PORT: "8081"
+      GITHUB_ORG: tektoncd
+    ports:
+      - "8081:8081"
+
+  frontend:
+    build:
+      context: .
+      dockerfile: deploy/docker/Dockerfile.frontend
+    environment:
+      BACKEND_UPSTREAM: backend:8081
+    ports:
+      - "8080:8080"
+    depends_on:
+      - backend

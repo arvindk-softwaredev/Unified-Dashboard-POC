@@ -1,0 +1,55 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: unified-dashboard-backend
+  labels:
+    app.kubernetes.io/name: unified-dashboard-backend
+    app.kubernetes.io/component: backend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: unified-dashboard-backend
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: unified-dashboard-backend
+        app.kubernetes.io/component: backend
+    spec:
+      containers:
+        - name: backend
+          image: unified-dashboard-backend:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http-api
+              containerPort: 8081
+          envFrom:
+            - configMapRef:
+                name: unified-dashboard-config
+            - secretRef:
+                name: unified-dashboard-secrets
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: http-api
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: http-api
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            runAsUser: 65532
+            capabilities:
+              drop: ["ALL"]

@@ -1,0 +1,83 @@
+body {
+  margin: 0;
+}
+
+/* AI Mode — shared gradient palette */
+.ai-mode-background {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    125deg,
+    rgba(99, 102, 241, 0.1) 0%,
+    rgba(139, 92, 246, 0.14) 22%,
+    rgba(59, 130, 246, 0.12) 45%,
+    rgba(16, 185, 129, 0.1) 68%,
+    rgba(236, 72, 153, 0.08) 100%
+  );
+  opacity: 0;
+  transition: opacity 0.5s ease-out;
+}
+
+.ai-mode-background--visible {
+  opacity: 1;
+}
+
+.ai-mode-background--sweep-out {
+  opacity: 1;
+  animation: ai-background-fade-out 2.8s ease-in-out forwards;
+}
+
+@keyframes ai-background-fade-out {
+  to {
+    opacity: 0;
+  }
+}
+
+.ai-mode-gradient-beam {
+  position: absolute;
+  top: -20%;
+  left: 0;
+  width: 55%;
+  height: 140%;
+  background: linear-gradient(
+    105deg,
+    transparent 0%,
+    rgba(99, 102, 241, 0) 15%,
+    rgba(139, 92, 246, 0.28) 35%,
+    rgba(59, 130, 246, 0.35) 50%,
+    rgba(16, 185, 129, 0.26) 65%,
+    rgba(236, 72, 153, 0.2) 80%,
+    transparent 100%
+  );
+  filter: blur(32px);
+  transform: translateX(-120%);
+  animation: ai-gradient-sweep-in 2.8s ease-in-out forwards;
+  will-change: transform;
+}
+
+.ai-mode-gradient-beam--reverse {
+  transform: translateX(220%);
+  animation: ai-gradient-sweep-out 2.8s ease-in-out forwards;
+}
+
+@keyframes ai-gradient-sweep-in {
+  from {
+    transform: translateX(-120%);
+  }
+  to {
+    transform: translateX(220%);
+  }
+}
+
+@keyframes ai-gradient-sweep-out {
+  from {
+    transform: translateX(220%);
+  }
+  to {
+    transform: translateX(-120%);
+  }
+}
+
+html.ai-mode-active body {
+  overflow-x: hidden;
+}

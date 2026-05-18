@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: unified-dashboard-config
+  labels:
+    app.kubernetes.io/name: unified-dashboard
+data:
+  GITHUB_ORG: tektoncd
+  PORT: "8081"
+  CORS_ORIGINS: "*"
+  CACHE_TTL_MINUTES: "15"

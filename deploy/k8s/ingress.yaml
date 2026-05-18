@@ -1,0 +1,23 @@
+# Cheaper/generic Kubernetes alternative to OpenShift Route.
+# Works on k3s, minikube, EKS, GKE, AKS with an Ingress controller (e.g. nginx-ingress).
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: unified-dashboard
+  labels:
+    app.kubernetes.io/name: unified-dashboard
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "120"
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: unified-dashboard.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: unified-dashboard-frontend
+                port:
+                  number: 80

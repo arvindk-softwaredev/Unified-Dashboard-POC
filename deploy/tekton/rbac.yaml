@@ -1,0 +1,33 @@
+# ServiceAccount for Tekton PipelineRuns (OpenShift Pipelines / generic Tekton)
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: pipeline
+  namespace: unified-dashboard
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: unified-dashboard-pipeline-deploy
+  namespace: unified-dashboard
+rules:
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "list", "watch", "patch", "update"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: unified-dashboard-pipeline-deploy
+  namespace: unified-dashboard
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: unified-dashboard-pipeline-deploy
+subjects:
+  - kind: ServiceAccount
+    name: pipeline
+    namespace: unified-dashboard
