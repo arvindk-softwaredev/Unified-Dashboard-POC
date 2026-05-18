@@ -15,6 +15,7 @@ type Config struct {
 	Port           int
 	GitHubToken    string
 	GitHubOrg      string
+	GeminiAPIKey   string
 	CORSOrigins    []string
 	CacheTTL       time.Duration
 }
@@ -118,11 +119,12 @@ func Load() Config {
 	}
 
 	return Config{
-		Port:        port,
-		GitHubToken: strings.TrimSpace(os.Getenv("GITHUB_TOKEN")),
-		GitHubOrg:   org,
-		CORSOrigins: origins,
-		CacheTTL:    cacheTTL,
+		Port:         port,
+		GitHubToken:  strings.TrimSpace(os.Getenv("GITHUB_TOKEN")),
+		GitHubOrg:    org,
+		GeminiAPIKey: strings.TrimSpace(os.Getenv("GEMINI_API_KEY")),
+		CORSOrigins:  origins,
+		CacheTTL:     cacheTTL,
 	}
 }
 

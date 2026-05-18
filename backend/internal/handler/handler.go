@@ -8,18 +8,21 @@ import (
 
 	"github.com/unified-dashboard/backend/internal/cache"
 	"github.com/unified-dashboard/backend/internal/github"
+	"github.com/unified-dashboard/backend/internal/llm"
 )
 
 type Handler struct {
 	github *github.Client
+	llm    *llm.Client
 	org    string
 	log    *slog.Logger
 	cache  *cache.Cache
 }
 
-func New(gh *github.Client, org string, log *slog.Logger, cacheTTL time.Duration) *Handler {
+func New(gh *github.Client, llmClient *llm.Client, org string, log *slog.Logger, cacheTTL time.Duration) *Handler {
 	return &Handler{
 		github: gh,
+		llm:    llmClient,
 		org:    org,
 		log:    log,
 		cache:  cache.New(cacheTTL),

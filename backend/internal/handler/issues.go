@@ -6,6 +6,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	ghclient "github.com/unified-dashboard/backend/internal/github"
+	"github.com/unified-dashboard/backend/internal/llm"
 )
 
 type goodFirstIssuesResponse struct {
@@ -22,10 +23,15 @@ func (h *Handler) ListGoodFirstIssues(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	aiMode := r.URL.Query().Get("ai_mode") == "true"
+
 	key := "good-first-issues:" + owner + "/" + name
+	if aiMode {
+		key = "good-first-issues:ai:" + owner + "/" + name
+	}
 
 	resp, hit, err := getOrFetch(h, r, key, func() (goodFirstIssuesResponse, error) {
-		ctx, cancel := contextWithTimeout(r, 45*time.Second)
+		ctx, cancel := contextWithTimeout(r, 60*time.Second)
 		defer cancel()
 
 		issues, err := h.github.ListGoodFirstIssues(ctx, owner, name)
@@ -35,6 +41,32 @@ func (h *Handler) ListGoodFirstIssues(w http.ResponseWriter, r *http.Request) {
 		if issues == nil {
 			issues = []ghclient.Issue{}
 		}
+
+		if aiMode && h.llm.Enabled() && len(issues) > 0 {
+			repoDesc, _ := h.github.GetRepoDescription(ctx, owner, name)
+			readme, _ := h.github.GetReadmeContent(ctx, owner, name)
+
+			inputs := make([]llm.IssueInput, len(issues))
+			for i, issue := range issues {
+				inputs[i] = llm.IssueInput{
+					Number: issue.Number,
+					Title:  issue.Title,
+					Body:   issue.Body,
+				}
+			}
+
+			complexities, err := h.llm.AnalyzeIssueComplexity(ctx, repoDesc, readme, inputs)
+			if err != nil {
+				h.log.Error("LLM complexity analysis failed for good-first-issues", "owner", owner, "repo", name, "error", err)
+			} else {
+				for i, issue := range issues {
+					if c, ok := complexities[issue.Number]; ok {
+						issues[i].Complexity = c
+					}
+				}
+			}
+		}
+
 		return goodFirstIssuesResponse{
 			Repository: owner + "/" + name,
 			Count:      len(issues),

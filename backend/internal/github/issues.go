@@ -9,15 +9,16 @@ import (
 )
 
 type Issue struct {
-	ID        int64    `json:"id"`
-	Number    int      `json:"number"`
-	Title     string   `json:"title"`
-	HTMLURL   string   `json:"html_url"`
-	State     string   `json:"state"`
-	Labels    []string `json:"labels"`
-	CreatedAt string   `json:"created_at,omitempty"`
-	Comments  int      `json:"comments"`
-	Body      string   `json:"body,omitempty"`
+	ID         int64    `json:"id"`
+	Number     int      `json:"number"`
+	Title      string   `json:"title"`
+	HTMLURL    string   `json:"html_url"`
+	State      string   `json:"state"`
+	Labels     []string `json:"labels"`
+	CreatedAt  string   `json:"created_at,omitempty"`
+	Comments   int      `json:"comments"`
+	Body       string   `json:"body,omitempty"`
+	Complexity string   `json:"complexity,omitempty"`
 }
 
 var goodFirstLabels = []string{

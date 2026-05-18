@@ -4,12 +4,14 @@ import CircularProgress from "@mui/material/CircularProgress";
 import { useEffect, useState } from "react";
 import { fetchRepositories, fetchTrackingTrends, type Repository, type TrendPoint } from "../api/client";
 import { buildTrendsFromRepos, mergeTrendPoints } from "./buildTrendsFromRepos";
+import { useAiMode } from "../theme/AiModeContext";
 import { DashboardLayout } from "./DashboardLayout";
 import { DashboardStats } from "./DashboardStats";
 import { Header } from "./Header";
 import { RepositoriesTable } from "./RepositoriesTable";
 
 export function Dashboard() {
+  const { aiMode } = useAiMode();
   const [repos, setRepos] = useState<Repository[]>([]);
   const [org, setOrg] = useState("tektoncd");
   const [loading, setLoading] = useState(true);
@@ -19,53 +21,13 @@ export function Dashboard() {
   const [trendsWarning, setTrendsWarning] = useState<string | null>(null);
 
   useEffect(() => {
-    let cancelled = false;
-
-    setLoading(true);
-    setTrendsLoading(true);
-    setReposError(null);
-    setTrendsWarning(null);
-
-    fetchRepositories()
-      .then(async reposData => {
-        if (cancelled) return;
-        setRepos(reposData.repositories);
-        setOrg(reposData.organization);
-        setLoading(false);
-
-        const localTrends = buildTrendsFromRepos(reposData.repositories);
-
-        try {
-          const trendsData = await fetchTrackingTrends();
-          if (cancelled) return;
-          setTrendPoints(mergeTrendPoints(trendsData.points, localTrends));
-          if (trendsData.partial) {
-            setTrendsWarning(
-              trendsData.message ??
-                "Some monthly PR and issue counts may be missing due to GitHub search limits.",
-            );
-          }
-        } catch {
-          if (cancelled) return;
-          setTrendPoints(localTrends);
-          setTrendsWarning(
-            "Could not load monthly PR and issue trends from GitHub. Repository and star trends are still shown.",
-          );
-        }
+    fetchRepositories({ aiMode })
+      .then(data => {
+        setRepos(data.repositories);
+        setOrg(data.organization);
       })
-      .catch(err => {
-        if (!cancelled) {
-          setReposError(err instanceof Error ? err.message : "Failed to load repositories");
-          setLoading(false);
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setTrendsLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
+      .catch(err => setReposError(err instanceof Error ? err.message : "Failed to load repositories"))
+      .finally(() => setLoading(false));
   }, []);
 
   return (

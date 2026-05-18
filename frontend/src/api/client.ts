@@ -38,6 +38,7 @@ export interface Issue {
   labels: string[];
   created_at?: string;
   comments: number;
+  complexity?: "beginner" | "intermediate" | "advanced";
 }
 
 export interface TrackingMetrics {
@@ -122,15 +123,20 @@ export type FetchResult<T> = {
 
 type FetchOptions = {
   refresh?: boolean;
+  aiMode?: boolean;
 };
 
-function withRefresh(path: string, refresh?: boolean) {
-  if (!refresh) return path;
-  return `${path}${path.includes("?") ? "&" : "?"}refresh=true`;
+function withParams(path: string, options?: FetchOptions) {
+  const params: string[] = [];
+  if (options?.refresh) params.push("refresh=true");
+  if (options?.aiMode) params.push("ai_mode=true");
+  if (params.length === 0) return path;
+  const sep = path.includes("?") ? "&" : "?";
+  return `${path}${sep}${params.join("&")}`;
 }
 
 async function getJSON<T>(path: string, options?: FetchOptions): Promise<FetchResult<T>> {
-  const res = await fetch(withRefresh(path, options?.refresh));
+  const res = await fetch(withParams(path, options));
   const contentType = res.headers.get("content-type") ?? "";
   const body = await res.text();
   const fromCache = res.headers.get("X-Cache") === "HIT";

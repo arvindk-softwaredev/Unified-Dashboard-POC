@@ -25,6 +25,7 @@ import {
   type PullRequestItem,
   type Repository,
 } from "../api/client";
+import { useAiMode } from "../theme/AiModeContext";
 import { InsightsLoading } from "./InsightsLoading";
 import { describeLatestMonthTrend } from "./statTrendUtils";
 import { TrendInsightBanner } from "./TrendInsightBanner";
@@ -86,6 +87,7 @@ function PanelToolbar({
 }
 
 export function RepositoryInsightPanel({ repo, refreshTrigger, onClose }: RepositoryInsightPanelProps) {
+  const { aiMode } = useAiMode();
   const [categories, setCategories] = useState<CategoryInsight[]>([]);
   const [selectedKey, setSelectedKey] = useState<string>("good_first_issues");
   const [ready, setReady] = useState(false);
@@ -118,7 +120,7 @@ export function RepositoryInsightPanel({ repo, refreshTrigger, onClose }: Reposi
       }, LOADING_DELAY_MS);
     }
 
-    fetchRepoInsights(owner, name, { refresh: forceRefresh })
+    fetchRepoInsights(owner, name, { refresh: forceRefresh, aiMode })
       .then(({ data, fromCache: cached }) => {
         if (cancelled) return;
         clearTimeout(loadingTimer);
@@ -139,7 +141,7 @@ export function RepositoryInsightPanel({ repo, refreshTrigger, onClose }: Reposi
       cancelled = true;
       clearTimeout(loadingTimer);
     };
-  }, [repo.full_name, refreshTrigger, applyInsights]);
+  }, [repo.full_name, refreshTrigger, aiMode, applyInsights]);
 
   const safeCategories = categories ?? [];
 
@@ -317,6 +319,29 @@ export function RepositoryInsightPanel({ repo, refreshTrigger, onClose }: Reposi
   );
 }
 
+const COMPLEXITY_CONFIG: Record<string, { label: string; color: "success" | "warning" | "error"; tooltip: string }> = {
+  beginner: { label: "Beginner", color: "success", tooltip: "Good for newcomers — simple changes like docs, config, or small fixes" },
+  intermediate: { label: "Intermediate", color: "warning", tooltip: "Moderate difficulty — requires codebase familiarity and some debugging" },
+  advanced: { label: "Advanced", color: "error", tooltip: "Complex — involves architecture, performance, or deep domain knowledge" },
+};
+
+function ComplexityChip({ complexity }: { complexity?: string }) {
+  if (!complexity) return null;
+  const config = COMPLEXITY_CONFIG[complexity];
+  if (!config) return null;
+  return (
+    <Tooltip title={config.tooltip}>
+      <Chip
+        label={config.label}
+        color={config.color}
+        size="small"
+        variant="outlined"
+        sx={{ ml: 1, fontWeight: 600, fontSize: "0.7rem", height: 22 }}
+      />
+    </Tooltip>
+  );
+}
+
 function CategoryItemList({ category }: { category: CategoryInsight }) {
   if (category.key === "pending_prs") {
     if (!category.pull_requests?.length) {
@@ -387,9 +412,12 @@ function CategoryItemList({ category }: { category: CategoryInsight }) {
         >
           <ListItemText
             primary={
-              <Link href={issue.html_url} target="_blank" rel="noopener noreferrer" underline="hover">
-                #{issue.number} {issue.title}
-              </Link>
+              <Stack direction="row" alignItems="center" flexWrap="wrap">
+                <Link href={issue.html_url} target="_blank" rel="noopener noreferrer" underline="hover">
+                  #{issue.number} {issue.title}
+                </Link>
+                <ComplexityChip complexity={issue.complexity} />
+              </Stack>
             }
           />
         </ListItem>

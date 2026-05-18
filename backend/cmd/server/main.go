@@ -13,6 +13,7 @@ import (
 	"github.com/unified-dashboard/backend/internal/config"
 	ghclient "github.com/unified-dashboard/backend/internal/github"
 	"github.com/unified-dashboard/backend/internal/handler"
+	"github.com/unified-dashboard/backend/internal/llm"
 	"github.com/unified-dashboard/backend/internal/server"
 )
 
@@ -45,9 +46,16 @@ func main() {
 
 	log.Info("repositories loaded", "org", cfg.GitHubOrg, "count", len(repos))
 
+	llmClient := llm.NewClient(cfg.GeminiAPIKey)
+	if llmClient.Enabled() {
+		log.Info("Gemini LLM enabled for AI mode complexity analysis")
+	} else {
+		log.Warn("GEMINI_API_KEY not set — AI mode complexity analysis disabled")
+	}
+
 	log.Info("API cache enabled", "ttl_minutes", cfg.CacheTTL.Minutes())
 
-	h := handler.New(gh, cfg.GitHubOrg, log, cfg.CacheTTL)
+	h := handler.New(gh, llmClient, cfg.GitHubOrg, log, cfg.CacheTTL)
 	srv := server.New(cfg, h)
 
 	httpServer := &http.Server{

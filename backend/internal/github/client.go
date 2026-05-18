@@ -53,6 +53,26 @@ func (c *Client) Authenticated() bool {
 	return c.authenticated
 }
 
+func (c *Client) GetReadmeContent(ctx context.Context, owner, repo string) (string, error) {
+	readme, _, err := c.api.Repositories.GetReadme(ctx, owner, repo, nil)
+	if err != nil {
+		return "", fmt.Errorf("get readme: %w", err)
+	}
+	content, err := readme.GetContent()
+	if err != nil {
+		return "", fmt.Errorf("decode readme: %w", err)
+	}
+	return content, nil
+}
+
+func (c *Client) GetRepoDescription(ctx context.Context, owner, repo string) (string, error) {
+	r, _, err := c.api.Repositories.Get(ctx, owner, repo)
+	if err != nil {
+		return "", fmt.Errorf("get repo: %w", err)
+	}
+	return r.GetDescription(), nil
+}
+
 func (c *Client) LogRateLimit(ctx context.Context) {
 	rl, _, err := c.api.RateLimits(ctx)
 	if err != nil {
