@@ -70,7 +70,7 @@ App: [http://localhost:8080](http://localhost:8080)
 ```
 backend/          Go API (GitHub client, cache, tracking)
 frontend/         React + MUI UI (Bun dev server)
-deploy/           Docker, Kubernetes/OpenShift, Tekton pipeline
+deploy/           Docker Compose (local), OpenShift manifests, GitHub Actions deploy
 ```
 
 ## API documentation
@@ -81,4 +81,4 @@ Quick links: `GET /api/health`, `GET /api/repositories`, `GET /api/repositories/
 
 ## Deployment (ignore this for now - not verified)
 
-See [deploy/README.md](deploy/README.md) for OpenShift, Kubernetes, and Tekton.
+See [deploy/README.md](deploy/README.md) for Docker Compose and OpenShift (GitHub Actions).

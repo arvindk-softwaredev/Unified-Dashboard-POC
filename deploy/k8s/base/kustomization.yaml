@@ -1,0 +1,26 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: unified-dashboard
+
+resources:
+- namespace.yaml
+- configmap.yaml
+- backend-deployment.yaml
+- backend-service.yaml
+- frontend-deployment.yaml
+- frontend-service.yaml
+- route-openshift.yaml
+
+
+images:
+- name: unified-dashboard-backend
+  newName: unified-dashboard-backend
+  newTag: latest
+- name: unified-dashboard-frontend
+  newName: unified-dashboard-frontend
+  newTag: latest
+labels:
+- includeSelectors: true
+  pairs:
+    app.kubernetes.io/part-of: unified-dashboard

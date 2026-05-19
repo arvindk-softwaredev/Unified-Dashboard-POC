@@ -1,33 +1,25 @@
-REGISTRY ?= unified-dashboard
-TAG ?= latest
-NAMESPACE ?= unified-dashboard
+# Makefile lives in deploy/; repo root is one level up.
+REPO_ROOT := $(abspath ..)
 
-.PHONY: docker-build docker-up docker-down k8s-apply k8s-route tekton-install tekton-run
+REGISTRY ?= quay.io/rh-ee-apalit
+BACKEND_IMAGE ?= tektoncd-unified-dashboard-backend
+FRONTEND_IMAGE ?= tektoncd-unified-dashboard-frontend
+TAG ?= latest
+# OpenShift clusters are usually amd64; set empty to build for host arch (local compose).
+DOCKER_PLATFORM ?= linux/amd64
+
+.PHONY: docker-build docker-up docker-down
 
 docker-build:
-	docker build -f deploy/docker/Dockerfile.backend -t $(REGISTRY)/unified-dashboard-backend:$(TAG) .
-	docker build -f deploy/docker/Dockerfile.frontend -t $(REGISTRY)/unified-dashboard-frontend:$(TAG) .
+	docker build $(if $(DOCKER_PLATFORM),--platform $(DOCKER_PLATFORM),) \
+		-f $(REPO_ROOT)/deploy/docker/Dockerfile.backend \
+		-t $(REGISTRY)/$(BACKEND_IMAGE):$(TAG) $(REPO_ROOT)
+	docker build $(if $(DOCKER_PLATFORM),--platform $(DOCKER_PLATFORM),) \
+		-f $(REPO_ROOT)/deploy/docker/Dockerfile.frontend \
+		-t $(REGISTRY)/$(FRONTEND_IMAGE):$(TAG) $(REPO_ROOT)
 
 docker-up:
-	docker compose -f deploy/docker-compose.yml up --build -d
+	docker compose -f $(REPO_ROOT)/deploy/docker-compose.yml --project-directory $(REPO_ROOT) up --build -d
 
 docker-down:
-	docker compose -f deploy/docker-compose.yml down
-
-k8s-apply:
-	kubectl apply -k deploy/k8s/
-	kubectl apply -f deploy/tekton/rbac.yaml
-
-k8s-route:
-	kubectl apply -f deploy/k8s/route-openshift.yaml -n $(NAMESPACE)
-
-k8s-ingress:
-	kubectl apply -f deploy/k8s/ingress.yaml -n $(NAMESPACE)
-
-tekton-install:
-	kubectl apply -f deploy/tekton/task-git-clone.yaml -n $(NAMESPACE)
-	kubectl apply -f deploy/tekton/task-build-image.yaml -n $(NAMESPACE)
-	kubectl apply -f deploy/tekton/pipeline.yaml -n $(NAMESPACE)
-
-tekton-run:
-	kubectl create -f deploy/tekton/pipelinerun.yaml -n $(NAMESPACE)
+	docker compose -f $(REPO_ROOT)/deploy/docker-compose.yml --project-directory $(REPO_ROOT) down

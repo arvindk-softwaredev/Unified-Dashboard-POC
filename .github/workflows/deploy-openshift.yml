@@ -1,0 +1,202 @@
+# Automates: Quay login → build/push 2 images → OpenShift deploy → app secrets (GitHub + Gemini).
+# Manual on Quay.io (once): create repos tektoncd-unified-dashboard-backend + tektoncd-unified-dashboard-frontend.
+name: Deploy to OpenShift
+
+on:
+  workflow_dispatch:
+    inputs:
+      namespace:
+        description: Target namespace
+        required: true
+        default: tektoncd-unified-dashboard
+      image_tag:
+        description: Image tag (empty = git sha)
+        required: false
+        default: ""
+      quay_registry:
+        description: Override QUAY_REGISTRY variable (e.g. quay.io/myorg)
+        required: false
+        default: ""
+  push:
+    branches: [main]
+    paths:
+      - "backend/**"
+      - "frontend/**"
+      - "deploy/**"
+      - ".github/workflows/deploy-openshift.yml"
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    outputs:
+      app_url: ${{ steps.deploy.outputs.app_url }}
+      health_url: ${{ steps.deploy.outputs.health_url }}
+      namespace: ${{ steps.deploy.outputs.namespace }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set image tag
+        id: tag
+        run: |
+          TAG="${{ github.event.inputs.image_tag }}"
+          if [ -z "$TAG" ]; then TAG="${GITHUB_SHA::12}"; fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Resolve Quay registry
+        id: quay
+        run: |
+          REG="${{ github.event.inputs.quay_registry }}"
+          if [ -z "$REG" ]; then REG="${{ vars.QUAY_REGISTRY }}"; fi
+          # Trim spaces/newlines (a trailing newline in the GitHub variable breaks docker tags).
+          REG="$(printf '%s' "$REG" | tr -d '\n\r' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//;s#/*$##')"
+          if [ -z "$REG" ]; then
+            echo "Set repository variable QUAY_REGISTRY to e.g. quay.io/rh-ee-apalit (no trailing slash or newline)"
+            exit 1
+          fi
+          case "$REG" in */*) ;; *)
+            echo "Invalid QUAY_REGISTRY: '$REG' — use format quay.io/your-org"
+            exit 1
+            ;;
+          esac
+          {
+            echo "registry<<EOF"
+            printf '%s\n' "$REG"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+          echo "Backend image: ${REG}/tektoncd-unified-dashboard-backend:${{ steps.tag.outputs.tag }}"
+          echo "Frontend image: ${REG}/tektoncd-unified-dashboard-frontend:${{ steps.tag.outputs.tag }}"
+
+      - name: Validate config
+        run: |
+          test -n "${{ steps.quay.outputs.registry }}" || exit 1
+          test -n "${{ secrets.QUAY_USERNAME }}" || (echo "Set secret QUAY_USERNAME" && exit 1)
+          test -n "${{ secrets.QUAY_PASSWORD }}" || (echo "Set secret QUAY_PASSWORD" && exit 1)
+          test -n "${{ secrets.OPENSHIFT_SERVER }}" || (echo "Set secret OPENSHIFT_SERVER" && exit 1)
+          test -n "${{ secrets.OPENSHIFT_TOKEN }}" || (echo "Set secret OPENSHIFT_TOKEN" && exit 1)
+
+      - name: Log in to Quay
+        uses: docker/login-action@v3
+        with:
+          registry: quay.io
+          username: ${{ secrets.QUAY_USERNAME }}
+          password: ${{ secrets.QUAY_PASSWORD }}
+
+      - name: Build and push backend
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: deploy/docker/Dockerfile.backend
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.quay.outputs.registry }}/tektoncd-unified-dashboard-backend:${{ steps.tag.outputs.tag }},${{ steps.quay.outputs.registry }}/tektoncd-unified-dashboard-backend:latest
+
+      - name: Build and push frontend
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: deploy/docker/Dockerfile.frontend
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.quay.outputs.registry }}/tektoncd-unified-dashboard-frontend:${{ steps.tag.outputs.tag }},${{ steps.quay.outputs.registry }}/tektoncd-unified-dashboard-frontend:latest
+
+      - name: Install OpenShift CLI
+        uses: redhat-actions/openshift-tools-installer@v1
+        with:
+          oc: "4.16"
+
+      - name: Install kustomize
+        run: |
+          KUSTOMIZE_VERSION=5.4.3
+          curl -fsSL \
+            "https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2Fv${KUSTOMIZE_VERSION}/kustomize_v${KUSTOMIZE_VERSION}_linux_amd64.tar.gz" \
+            | sudo tar xz -C /usr/local/bin
+          kustomize version
+
+      - name: Log in to cluster
+        env:
+          OPENSHIFT_SERVER: ${{ secrets.OPENSHIFT_SERVER }}
+          OPENSHIFT_TOKEN: ${{ secrets.OPENSHIFT_TOKEN }}
+        run: |
+          SERVER="$(printf '%s' "$OPENSHIFT_SERVER" | tr -d '\n\r' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+          TOKEN="$(printf '%s' "$OPENSHIFT_TOKEN" | tr -d '\n\r' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+          if [ -z "$SERVER" ] || [ -z "$TOKEN" ]; then
+            echo "OPENSHIFT_SERVER and OPENSHIFT_TOKEN must be set"
+            exit 1
+          fi
+          case "$SERVER" in
+            https://*) ;;
+            *)
+              echo "OPENSHIFT_SERVER must start with https:// (got a value with invalid characters or missing scheme)"
+              exit 1
+              ;;
+          esac
+          oc login --token="$TOKEN" --server="$SERVER" --insecure-skip-tls-verify=true
+          oc whoami --show-server
+
+      - name: Pick GitHub API token
+        id: ghtoken
+        run: |
+          if [ -n "${{ secrets.GH_PAT }}" ]; then
+            echo "::add-mask::${{ secrets.GH_PAT }}"
+            echo "token=${{ secrets.GH_PAT }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "token=${{ secrets.GITHUB_TOKEN }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Deploy
+        id: deploy
+        env:
+          NS: ${{ github.event.inputs.namespace || 'tektoncd-unified-dashboard' }}
+          TAG: ${{ steps.tag.outputs.tag }}
+          REG: ${{ steps.quay.outputs.registry }}
+        run: |
+          ./deploy/scripts/ensure-namespace.sh "$NS"
+
+          export GITHUB_TOKEN="${{ steps.ghtoken.outputs.token }}"
+          export GEMINI_API_KEY="${{ secrets.GEMINI_API_KEY }}"
+          export NAMESPACE="$NS"
+          ./deploy/scripts/apply-app-secrets.sh
+
+          cd deploy/k8s/overlays/openshift
+          kustomize edit set namespace "$NS"
+          kustomize edit set image \
+            unified-dashboard-backend=${REG}/tektoncd-unified-dashboard-backend:${TAG} \
+            unified-dashboard-frontend=${REG}/tektoncd-unified-dashboard-frontend:${TAG}
+          oc apply -k .
+
+          oc rollout status deployment/unified-dashboard-backend -n "$NS" --timeout=10m
+          oc rollout status deployment/unified-dashboard-frontend -n "$NS" --timeout=10m
+
+          HOST="$(oc get route unified-dashboard -n "$NS" -o jsonpath='{.spec.host}')"
+          if [ -z "$HOST" ]; then
+            echo "Route unified-dashboard not found in namespace $NS"
+            exit 1
+          fi
+
+          APP_URL="https://${HOST}/"
+          HEALTH_URL="https://${HOST}/api/health"
+
+          echo "app_url=${APP_URL}" >> "$GITHUB_OUTPUT"
+          echo "health_url=${HEALTH_URL}" >> "$GITHUB_OUTPUT"
+          echo "namespace=${NS}" >> "$GITHUB_OUTPUT"
+
+          echo "Dashboard URL:  ${APP_URL}"
+          echo "Health check:   ${HEALTH_URL}"
+
+          echo "::notice title=Dashboard URL::${APP_URL}"
+          echo "::notice title=Health check::${HEALTH_URL}"
+
+          {
+            echo "## Deployed to OpenShift"
+            echo ""
+            echo "| | |"
+            echo "|---|---|"
+            echo "| **Namespace** | \`${NS}\` |"
+            echo "| **Image tag** | \`${TAG}\` |"
+            echo "| **Dashboard** | [${APP_URL}](${APP_URL}) |"
+            echo "| **Health check** | [${HEALTH_URL}](${HEALTH_URL}) |"
+            echo ""
+            echo "### Quick links"
+            echo "- Dashboard: ${APP_URL}"
+            echo "- Health: \`${HEALTH_URL}\`"
+          } >> "$GITHUB_STEP_SUMMARY"

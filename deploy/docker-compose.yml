@@ -1,3 +1,4 @@
+# Paths are relative to repo root (--project-directory in deploy/Makefile).
 services:
   backend:
     build:

@@ -1,0 +1,16 @@
+# Image names/tags are set at deploy time by GitHub Actions (kustomize edit set image).
+# Set QUAY_REGISTRY e.g. quay.io/rh-ee-apalit — do not hardcode image tags here.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: tektoncd-unified-dashboard
+
+resources:
+- ../../base
+images:
+- name: unified-dashboard-backend
+  newName: quay.io/rh-ee-apalit/tektoncd-unified-dashboard-backend
+  newTag: local-test-2
+- name: unified-dashboard-frontend
+  newName: quay.io/rh-ee-apalit/tektoncd-unified-dashboard-frontend
+  newTag: local-test-2

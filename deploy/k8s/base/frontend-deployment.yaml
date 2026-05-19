@@ -19,7 +19,7 @@ spec:
       containers:
         - name: frontend
           image: unified-dashboard-frontend:latest
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
           env:
             - name: BACKEND_UPSTREAM
               value: unified-dashboard-backend:8081
@@ -48,6 +48,5 @@ spec:
           securityContext:
             allowPrivilegeEscalation: false
             runAsNonRoot: true
-            runAsUser: 101
             capabilities:
               drop: ["ALL"]

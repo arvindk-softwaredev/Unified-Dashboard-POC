@@ -19,7 +19,7 @@ spec:
       containers:
         - name: backend
           image: unified-dashboard-backend:latest
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
           ports:
             - name: http-api
               containerPort: 8081
@@ -50,6 +50,5 @@ spec:
           securityContext:
             allowPrivilegeEscalation: false
             runAsNonRoot: true
-            runAsUser: 65532
             capabilities:
               drop: ["ALL"]

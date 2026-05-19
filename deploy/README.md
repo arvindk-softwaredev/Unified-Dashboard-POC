@@ -1,65 +1,97 @@
 # Deploy Unified Dashboard
 
-## Architecture (2 pods — independent deploys)
+## Architecture (2 pods — separate images, one URL)
 
 ```
-Route/Ingress → frontend Service → nginx Pod
-                                      └─ proxy /api → backend Service → Go API Pod
+Internet
+   │
+   ▼
+OpenShift Route  (single public URL — only the frontend is exposed)
+   │
+   ▼
+frontend Pod (nginx)  ──proxy /api/*──►  backend Pod (Go API)
+   image: .../tektoncd-unified-dashboard-frontend   image: .../tektoncd-unified-dashboard-backend
 ```
 
-| Workload | Deploy independently | Image |
-|----------|----------------------|-------|
-| `unified-dashboard-backend` | API / tracking changes | `unified-dashboard-backend` |
-| `unified-dashboard-frontend` | UI changes | `unified-dashboard-frontend` |
+| Workload | Image | Exposed? |
+|----------|--------|----------|
+| `unified-dashboard-frontend` | Quay `.../tektoncd-unified-dashboard-frontend:tag` | **Yes** — Route points here |
+| `unified-dashboard-backend` | Quay `.../tektoncd-unified-dashboard-backend:tag` | **No** — cluster-internal Service only |
 
-## GitHub token (fix rate limits)
+The browser only opens the **Route URL**. Nginx serves the UI and forwards `/api` to the backend Service.
 
-1. Put the token in **`backend/.env`** (not the repo root):
-   ```bash
-   cp backend/.env.example backend/.env
-   # edit: GITHUB_TOKEN=ghp_...
-   ```
-2. Restart the backend from `backend/` or any directory (loads `.env` and `backend/.env`).
-3. On startup you should see: `GITHUB_TOKEN loaded — using authenticated GitHub API`
-4. Check `GET /api/health` → `"github_authenticated": true`
+After deploy, the app URL is in the GitHub Actions job summary, or:
 
-**Security:** Never commit tokens. If a token was committed, **revoke it** on GitHub and create a new one.
+```bash
+oc get route unified-dashboard -n tektoncd-unified-dashboard -o jsonpath='https://{.spec.host}{"\n"}'
+```
 
-**Why limits still happen with a token:** Search API is capped at **30 requests/minute** (separate from the 5000/hr core limit). The tracking dashboard uses search + per-repo CI calls. We cache `/api/tracking/summary` for 2 minutes and pace search calls.
+---
 
 ## Local (Docker Compose)
 
+From the repo root:
+
 ```bash
-cp backend/.env.example backend/.env   # add GITHUB_TOKEN
-make -C deploy docker-up
+cp backend/.env.example backend/.env   # GITHUB_TOKEN, GEMINI_API_KEY
+DOCKER_PLATFORM= make -C deploy docker-up   # host arch for Apple Silicon; omit on amd64
 open http://localhost:8080
 ```
 
-## OpenShift
+Or:
 
 ```bash
-oc new-project unified-dashboard
-oc create secret generic unified-dashboard-secrets \
-  --from-literal=GITHUB_TOKEN=<token> -n unified-dashboard
-
-export REGISTRY=image-registry.openshift-image-registry.svc:5000/unified-dashboard
-make -C deploy docker-build REGISTRY=$REGISTRY
-# push images, then:
-oc apply -k deploy/k8s/
-oc apply -f deploy/k8s/route-openshift.yaml
-oc get route unified-dashboard-frontend -n unified-dashboard
+cp backend/.env.example backend/.env
+docker compose -f deploy/docker-compose.yml up --build
 ```
 
-## Roll out only one component
+Stop: `make -C deploy docker-down`
+
+Build images only (e.g. before pushing to Quay):
 
 ```bash
-oc set image deployment/unified-dashboard-backend \
-  backend=$REGISTRY/unified-dashboard-backend:new-tag -n unified-dashboard
-
-oc set image deployment/unified-dashboard-frontend \
-  frontend=$REGISTRY/unified-dashboard-frontend:new-tag -n unified-dashboard
+export QUAY_REGISTRY=quay.io/your-org
+export TAG=latest
+make -C deploy docker-build REGISTRY=$QUAY_REGISTRY TAG=$TAG
 ```
 
-## Tekton
+---
 
-See `deploy/tekton/pipeline.yaml` — deploy task patches **both** deployments independently.
+## Automated deploy (GitHub Actions)
+
+Workflow: [`.github/workflows/deploy-openshift.yml`](../.github/workflows/deploy-openshift.yml)
+
+The workflow builds and pushes both images to Quay, deploys to OpenShift, applies secrets, and prints the Route URL.
+
+### One-time on [quay.io](https://quay.io)
+
+Create repositories:
+
+- `<your-org>/tektoncd-unified-dashboard-backend`
+- `<your-org>/tektoncd-unified-dashboard-frontend`
+
+### GitHub configuration
+
+**Repository variable:** `QUAY_REGISTRY` (e.g. `quay.io/rh-ee-apalit`)
+
+**Secrets:** `QUAY_USERNAME`, `QUAY_PASSWORD`, `OPENSHIFT_SERVER`, `OPENSHIFT_TOKEN`, `GEMINI_API_KEY`, and optionally `GH_PAT` (else uses `GITHUB_TOKEN`).
+
+**Run:** Actions → **Deploy to OpenShift** → Run workflow.
+
+Manifests live under `deploy/k8s/`; deploy scripts used by CI:
+
+- `deploy/scripts/ensure-namespace.sh`
+- `deploy/scripts/apply-app-secrets.sh`
+
+Image names/tags are patched at deploy time in `deploy/k8s/overlays/openshift/`.
+
+---
+
+## Container base images (Red Hat UBI)
+
+| Stage | Image |
+|-------|--------|
+| Go build | `registry.access.redhat.com/ubi9/go-toolset` |
+| Go runtime | `registry.access.redhat.com/ubi9/ubi-minimal` |
+| Frontend build | `registry.access.redhat.com/ubi9/nodejs-22` (+ Bun) |
+| Frontend runtime | `registry.access.redhat.com/ubi9/nginx-124` |
