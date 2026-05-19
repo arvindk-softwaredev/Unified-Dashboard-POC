@@ -126,6 +126,9 @@ function PanelToolbar({
   );
 }
 
+type ComplexityLevel = "beginner" | "intermediate" | "advanced";
+const ALL_COMPLEXITY_LEVELS: ComplexityLevel[] = ["beginner", "intermediate", "advanced"];
+
 export function RepositoryInsightPanel({ repo, refreshTrigger, onClose }: RepositoryInsightPanelProps) {
   const { aiMode } = useAiMode();
   const parts = repo.full_name.split("/");
@@ -146,6 +149,7 @@ export function RepositoryInsightPanel({ repo, refreshTrigger, onClose }: Reposi
   const isPending = insightsQuery.isPending && !insightsQuery.data;
   const loaderDelay = refreshTrigger > 0 ? 0 : LOADING_DELAY_MS;
   const showLoader = useDelayedPending(isPending, loaderDelay);
+  const [complexityFilter, setComplexityFilter] = useState<ComplexityLevel | null>(null);
 
   const safeCategories = insightsQuery.data?.categories ?? [];
   const latestRelease = insightsQuery.data?.latestRelease ?? null;
@@ -176,6 +180,14 @@ export function RepositoryInsightPanel({ repo, refreshTrigger, onClose }: Reposi
     () => (selected ? filterCategoryByMonth(selected, monthFilter) : undefined),
     [selected, monthFilter],
   );
+
+  const hasIssueCategory = selected?.issues && selected.issues.length > 0;
+
+  const filteredIssues = useMemo(() => {
+    if (!selected?.issues) return [];
+    if (!complexityFilter) return selected.issues;
+    return selected.issues.filter(i => i.complexity === complexityFilter);
+  }, [selected, complexityFilter]);
 
   const pieData = useMemo(
     () =>
@@ -389,6 +401,7 @@ export function RepositoryInsightPanel({ repo, refreshTrigger, onClose }: Reposi
                 const entry = item?.dataIndex != null ? slice[item.dataIndex] : undefined;
                 if (entry) {
                   selectCategory(String(entry.id));
+                  setComplexityFilter(null);
                 }
               }}
             />
@@ -444,10 +457,38 @@ export function RepositoryInsightPanel({ repo, refreshTrigger, onClose }: Reposi
         </Paper>
 
         <Box>
-          <Typography variant="subtitle2" gutterBottom>
-            {listTitle}
-          </Typography>
-          <CategoryItemList category={filteredSelected} />
+          <Stack direction="row" spacing={1} sx={{ alignItems: "center", mb: 1, flexWrap: "wrap" }}>
+              <Typography variant="subtitle2">
+                {selected.label} ({complexityFilter ? filteredIssues.length : selected.total})
+              </Typography>
+              {hasIssueCategory && (
+                <>
+                  <Chip
+                    label="All"
+                    size="small"
+                    variant={complexityFilter === null ? "filled" : "outlined"}
+                    onClick={() => setComplexityFilter(null)}
+                    sx={{ fontWeight: complexityFilter === null ? 700 : 400 }}
+                  />
+                  {ALL_COMPLEXITY_LEVELS.map(level => {
+                    const cfg = COMPLEXITY_CONFIG[level]!;
+                    const active = complexityFilter === level;
+                    return (
+                      <Chip
+                        key={level}
+                        label={cfg.label}
+                        size="small"
+                        color={cfg.color}
+                        variant={active ? "filled" : "outlined"}
+                        onClick={() => setComplexityFilter(active ? null : level)}
+                        sx={{ fontWeight: active ? 700 : 400 }}
+                      />
+                    );
+                  })}
+                </>
+              )}
+            </Stack>
+          <CategoryItemList category={filteredSelected} filteredIssues={complexityFilter ? filteredIssues : undefined}/>
         </Box>
       </Box>
     </Fade>
@@ -623,7 +664,7 @@ function InsightItemRow({
   );
 }
 
-function CategoryItemList({ category }: { category: CategoryInsight }) {
+function CategoryItemList({ category, filteredIssues }: { category: CategoryInsight; filteredIssues?: Issue[] }) {
   const stale = category.key === "stale_prs" || category.key === "stale_issues";
 
   if (isPrCategory(category.key)) {
@@ -652,14 +693,14 @@ function CategoryItemList({ category }: { category: CategoryInsight }) {
       </InsightEmptyState>
     );
   }
-
-  if (!category.issues?.length) {
+  const issues = filteredIssues ?? category.issues;
+  if (!issues?.length) {
     return <InsightEmptyState>No items match the current filters.</InsightEmptyState>;
   }
 
   return (
     <InsightList>
-      {category.issues.map((issue: Issue) => (
+      {issues.map((issue: Issue) => (
         <InsightItemRow
           key={issue.id}
           number={issue.number}

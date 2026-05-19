@@ -1,6 +1,5 @@
 import Alert from "@mui/material/Alert";
 import Box from "@mui/material/Box";
-import { useAiMode } from "../theme/AiModeContext";
 import {
   useRefetchTrackingTrendsAfterRepos,
   useRepositoriesQuery,
@@ -13,17 +12,16 @@ import { Header } from "./Header";
 import { RepositoriesTable } from "./RepositoriesTable";
 
 export function Dashboard() {
-  const { aiMode } = useAiMode();
 
-  const reposQuery = useRepositoriesQuery(aiMode);
-  const trendsQuery = useTrackingTrendsQuery(aiMode);
+  const reposQuery = useRepositoriesQuery();
+  const trendsQuery = useTrackingTrendsQuery();
 
   const repositories = reposQuery.data?.repositories ?? [];
   const org = reposQuery.data?.organization ?? "tektoncd";
   const reposPending = reposQuery.isPending && repositories.length === 0;
   const reposReady = reposQuery.isSuccess && repositories.length > 0;
 
-  useRefetchTrackingTrendsAfterRepos(aiMode, reposReady);
+  useRefetchTrackingTrendsAfterRepos(reposReady);
 
   const localTrendPoints = buildTrendsFromRepos(repositories);
   const trendPoints = trendsQuery.data
