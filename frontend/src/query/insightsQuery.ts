@@ -10,13 +10,14 @@ function defaultCategoryKey(list: CategoryInsight[]): string {
 export function useRepoInsightsQuery(
   owner: string,
   name: string,
-  refresh: boolean,
+  refreshTrigger: number,
   aiMode: boolean,
   enabled: boolean,
 ) {
   return useQuery({
-    queryKey: queryKeys.repoInsights(owner, name, refresh, aiMode),
+    queryKey: queryKeys.repoInsights(owner, name, refreshTrigger, aiMode),
     queryFn: async () => {
+      const refresh = refreshTrigger > 0;
       const result = await fetchRepoInsights(owner, name, { refresh, aiMode });
       const list = result.data.categories ?? [];
       return {

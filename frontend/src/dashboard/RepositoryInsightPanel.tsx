@@ -138,7 +138,7 @@ export function RepositoryInsightPanel({ repo, refreshTrigger, onClose }: Reposi
   const insightsQuery = useRepoInsightsQuery(
     owner,
     name,
-    refreshTrigger > 0,
+    refreshTrigger,
     aiMode,
     Boolean(owner && name),
   );
