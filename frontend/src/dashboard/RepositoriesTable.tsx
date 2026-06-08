@@ -234,6 +234,7 @@ export function RepositoriesTable({ repositories, loading = false }: Repositorie
   const [sortKey, setSortKey] = useState<RepoSortKey>("stars-desc");
   const listRef = useRef<HTMLDivElement>(null);
   const cardRefs = useRef<Map<number, HTMLDivElement>>(new Map());
+  const pendingDeepLink = useRef(window.location.hash === "#pipeline");
 
   const visibleRepos = useMemo(() => {
     const filtered = repositories.filter(r => repoMatchesQuery(r, searchQuery));
@@ -241,8 +242,21 @@ export function RepositoriesTable({ repositories, loading = false }: Repositorie
   }, [repositories, searchQuery, sortKey]);
 
   const setCardRef = (id: number) => (el: HTMLDivElement | null) => {
-    if (el) cardRefs.current.set(id, el);
-    else cardRefs.current.delete(id);
+    if (el) {
+      cardRefs.current.set(id, el);
+      if (pendingDeepLink.current && repositories.find(r => r.name === "pipeline")?.id === id) {
+        const repoId = id;
+        setExpandedId(repoId);
+        requestAnimationFrame(() => {
+          if (el.isConnected) {
+            el.scrollIntoView({ behavior: "smooth", block: "start" });
+            pendingDeepLink.current = false;
+          }
+        });
+      }
+    } else {
+      cardRefs.current.delete(id);
+    }
   };
 
   const scrollExpandedCardIntoView = useCallback((id: number) => {
@@ -254,11 +268,16 @@ export function RepositoriesTable({ repositories, loading = false }: Repositorie
     });
   }, []);
 
+  const clearHash = () => {
+    if (window.location.hash) history.replaceState(null, "", window.location.pathname + window.location.search);
+  };
+
   const toggle = (id: number) => {
+    clearHash();
     setExpandedId(prev => (prev === id ? null : id));
   };
 
-  const collapse = () => setExpandedId(null);
+  const collapse = () => { clearHash(); setExpandedId(null); };
 
   const handleRefresh = (repo: Repository, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -304,7 +323,7 @@ export function RepositoriesTable({ repositories, loading = false }: Repositorie
             variant="outlined"
             placeholder="Search repositories…"
             value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
+            onChange={e => { clearHash(); setExpandedId(null); setSearchQuery(e.target.value); }}
             sx={theme => ({
               flex: 1,
               minWidth: { sm: 220 },
@@ -325,7 +344,7 @@ export function RepositoriesTable({ repositories, loading = false }: Repositorie
                         size="small"
                         aria-label="Clear search"
                         edge="end"
-                        onClick={() => setSearchQuery("")}
+                        onClick={() => { clearHash(); setExpandedId(null); setSearchQuery(""); }}
                       >
                         <ClearIcon sx={{ fontSize: 18 }} />
                       </IconButton>
@@ -340,7 +359,7 @@ export function RepositoriesTable({ repositories, loading = false }: Repositorie
             variant="outlined"
             value={sortKey}
             aria-label="Sort repositories"
-            onChange={e => setSortKey(e.target.value as RepoSortKey)}
+            onChange={e => { clearHash(); setExpandedId(null); setSortKey(e.target.value as RepoSortKey); }}
             sx={theme => ({
               minWidth: { xs: "100%", sm: 240 },
               ...repoToolbarControlSx(theme),
@@ -408,7 +427,7 @@ export function RepositoriesTable({ repositories, loading = false }: Repositorie
               <Chip
                 size="small"
                 label="Clear search"
-                onClick={() => setSearchQuery("")}
+                onClick={() => { clearHash(); setExpandedId(null); setSearchQuery(""); }}
                 sx={{ mt: 1 }}
               />
             )}
