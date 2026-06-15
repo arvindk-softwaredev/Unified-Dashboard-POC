@@ -12,12 +12,13 @@ import (
 )
 
 type Config struct {
-	Port           int
-	GitHubToken    string
-	GitHubOrg      string
-	GeminiAPIKey   string
-	CORSOrigins    []string
-	CacheTTL       time.Duration
+	Port         int
+	GitHubToken  string
+	GitHubOrg    string
+	GeminiAPIKey string
+	GeminiModel  string
+	CORSOrigins  []string
+	CacheTTL     time.Duration
 }
 
 // LoadEnvFiles loads the first existing .env files found (later files do not override earlier).
@@ -118,11 +119,17 @@ func Load() Config {
 		}
 	}
 
+	geminiModel := os.Getenv("GEMINI_MODEL")
+	if geminiModel == "" {
+		geminiModel = "gemini-2.5-flash"
+	}
+
 	return Config{
 		Port:         port,
 		GitHubToken:  strings.TrimSpace(os.Getenv("GITHUB_TOKEN")),
 		GitHubOrg:    org,
 		GeminiAPIKey: strings.TrimSpace(os.Getenv("GEMINI_API_KEY")),
+		GeminiModel:  geminiModel,
 		CORSOrigins:  origins,
 		CacheTTL:     cacheTTL,
 	}

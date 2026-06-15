@@ -46,7 +46,7 @@ func main() {
 
 	log.Info("repositories loaded", "org", cfg.GitHubOrg, "count", len(repos))
 
-	llmClient := llm.NewClient(cfg.GeminiAPIKey)
+	llmClient := llm.NewClient(cfg.GeminiAPIKey, cfg.GeminiModel)
 	if llmClient.Enabled() {
 		log.Info("Gemini LLM enabled for AI mode complexity analysis")
 	} else {

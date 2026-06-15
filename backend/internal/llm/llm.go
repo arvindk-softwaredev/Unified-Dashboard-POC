@@ -25,11 +25,14 @@ type Client struct {
 	cache      *batchCache
 }
 
-func NewClient(apiKey string) *Client {
+func NewClient(apiKey, model string) *Client {
+	if model == "" {
+		model = "gemini-2.5-flash"
+	}
 	return &Client{
 		apiKey:     strings.TrimSpace(apiKey),
 		httpClient: &http.Client{Timeout: 120 * time.Second},
-		model:      "gemini-2.0-flash",
+		model:      model,
 		cache:      newBatchCache(2 * time.Hour),
 	}
 }
